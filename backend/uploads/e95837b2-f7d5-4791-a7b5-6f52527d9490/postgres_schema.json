@@ -1,0 +1,4 @@
+{
+    "query": "INSERT INTO participants (name, email, phno) VALUES (%s, %s, %s) ON CONFLICT (email) DO UPDATE SET name = EXCLUDED.name, phno = EXCLUDED.phno;",
+    "table": "participants"
+}
