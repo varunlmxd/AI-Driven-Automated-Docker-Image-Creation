@@ -1,5 +1,5 @@
 from flask import jsonify
-from threading import Thread
+# from threading import Thread
 import docker
 import socket
 import os
@@ -24,10 +24,29 @@ class QueueHandler(logging.Handler):
 
 # Custom logger for our application
 logger = logging.getLogger('app')
+
 logger.setLevel(logging.INFO)
-logger.addHandler(QueueHandler())
+# Add timestamp to log format
+formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
+queue_handler = QueueHandler()
+queue_handler.setFormatter(formatter)
+logger.addHandler(queue_handler)
 
 def clean_dangling_images(logger,client):
+    """
+    Clean up dangling Docker images and any containers using them.
+
+    This function finds all dangling Docker images (images with none:none tag),
+    stops and removes any containers using these images, and then removes the
+    dangling images themselves.
+
+    Args:
+        logger (logging.Logger): The logger instance for logging errors.
+        client (docker.DockerClient): The Docker client instance to interact with Docker.
+
+    Returns:
+        None
+    """
     # Find all dangling images (images with none:none)
     dangling_images = client.images.list(filters={"dangling": True})
     # Stop and remove any containers using dangling images

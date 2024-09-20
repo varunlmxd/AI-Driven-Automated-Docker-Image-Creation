@@ -3,6 +3,12 @@ import axios from 'axios';
 import { FaDocker } from 'react-icons/fa';
 import { FaFileZipper } from 'react-icons/fa6';
 import { IoMdDownload } from 'react-icons/io';
+import { GoogleGenerativeAI } from '@google/generative-ai';
+import ReactMarkdown from 'react-markdown';
+import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
+import { solarizedlight } from 'react-syntax-highlighter/dist/esm/styles/prism';
+
+const genAI = new GoogleGenerativeAI('<Gemini API key>'); // Replace with your actual API key
 
 const App = () => {
   const [zipFile, setZipFile] = useState(null);
@@ -16,6 +22,9 @@ const App = () => {
   const [renderLog, setRenderLog] = useState(false);
   const [dockerFileError, setDockerFileError] = useState('');
   const [logs, setLogs] = useState([]);
+  const [solution, setSolution] = useState('');
+  const [generatingSolution, setGeneratingSolution] = useState(false);
+
 
   const handleFileChange = (e) => {
     setZipFile(e.target.files[0]);
@@ -50,6 +59,7 @@ const App = () => {
     setOutput(null);
     setLogs([]); // Clear previous logs
     setRenderLog(true);
+    setSolution('');
     const formData = new FormData();
     formData.append('Dockerfile', dockerFile);
     formData.append('zip_file', zipFile);
@@ -109,6 +119,29 @@ const App = () => {
     document.body.removeChild(element); // Clean up
   };
 
+  const generateSolution = async () => {
+    setGeneratingSolution(true);
+    try {
+      const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+      const prompt = `Given the following error and build logs, suggest a solution:
+      
+      Error: ${error}
+      
+      Build Logs:
+      ${logs.join('\n')}
+      
+      Provide a step-by-step solution to resolve this issue. Use markdown formatting for better readability, including code blocks where appropriate:`;
+
+      const result = await model.generateContent(prompt);
+      setSolution(result.response.text());
+    } catch (err) {
+      console.error('Error generating solution:', err);
+      setSolution('Failed to generate a solution. Please try again.');
+    } finally {
+      setGeneratingSolution(false);
+    }
+  };
+
   const renderOutput = () => {
     if (!output || !Array.isArray(output)) return null;
 
@@ -151,6 +184,48 @@ const App = () => {
       </div>
     </div>
   );
+  const renderError = () => (
+    <div className="mt-4 bg-red-100 border border-red-400 text-red-700 px-4 py-3 sm:px-6 sm:py-4 lg:px-8 lg:py-5 rounded relative">
+      <strong>Error:</strong> {error}
+      <br />
+      <button
+        onClick={generateSolution}
+        disabled={generatingSolution}
+         flex items-center justify-center
+        className="mt-2 bg-blue-500 text-white rounded-md hover:bg-blue-600 transition duration-300 text-white font-bold py-2 px-4 sm:px-6 sm:py-2 lg:px-8 lg:py-3 rounded"
+      >
+        {generatingSolution ? 'Generating Solution...' : 'Generate Solution'}
+      </button>
+      {solution && (
+        <div className="mt-4 bg-white border border-gray-300 text-gray-800 px-4 py-3 sm:px-6 sm:py-4 lg:px-8 lg:py-5 rounded relative">
+          <strong className="block mb-2 text-sm sm:text-base lg:text-lg">
+            Suggested Solution:
+          </strong>
+          <ReactMarkdown
+            children={solution}
+            components={{
+              code({ node, inline, className, children, ...props }) {
+                const match = /language-(\w+)/.exec(className || '');
+                return !inline && match ? (
+                  <SyntaxHighlighter
+                    children={String(children).replace(/\n$/, '')}
+                    style={solarizedlight}
+                    language={match[1]}
+                    PreTag="div"
+                    {...props}
+                  />
+                ) : (
+                  <code className={className} {...props}>
+                    {children}
+                  </code>
+                );
+              },
+            }}
+          />
+        </div>
+      )}
+    </div>
+  );  
 
   return (
     <div className="flex flex-col items-center justify-center min-h-screen bg-gray-100 break-words">
@@ -252,11 +327,7 @@ const App = () => {
         </form>
 
         {/* Display error if any */}
-        {error && (
-          <div className="mt-4 bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded relative">
-            <strong>Error:</strong> {error}
-          </div>
-        )}
+        {error && renderError()}
 
         {/* Render the output if available */}
         {output && renderOutput()}
